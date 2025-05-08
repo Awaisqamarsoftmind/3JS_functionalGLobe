@@ -124,7 +124,7 @@ function App() {
     pointColor: "color",
     pointRadius: "size",
     pointsMerge: true,
-    pointResolution: 3,
+    pointResolution: 3, 
     pointsTransitionDuration: 0,
     onGlobeClick: handleGlobeClick,
     atmosphereColor: "#0a0a2a",
