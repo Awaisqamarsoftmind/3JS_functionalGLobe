@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import Globe from "react-globe.gl";
-import { geoContains } from "d3-geo";
+import { geoContains ,geoArea } from "d3-geo";
 import * as THREE from "three";
 
 function App() {
@@ -13,7 +13,39 @@ function App() {
   // Colors for visualization
   const dotColor = "#D927C2"; // Brighter purple for country dots
   const borderColor = "#E0E0FF"; // Light color for borders
-
+  const generateSymmetricCountryDots = (countryFeature) => {
+    const denseDots = [];
+  
+    // 🌍 Estimate area of country (steradians)
+    const area = geoArea(countryFeature); // ~0 to ~12.5
+    const basePoints = 30000; // max resolution
+    const totalPoints = Math.floor(basePoints * (area / 12.5)); // scale to globe size
+  
+    for (let i = 0; i < totalPoints; i++) {
+      const phi = Math.acos(1 - 2 * (i + 0.5) / totalPoints);
+      const theta = Math.PI * (1 + Math.sqrt(5)) * (i + 0.5);
+  
+      const x = Math.cos(theta) * Math.sin(phi);
+      const y = Math.sin(theta) * Math.sin(phi);
+      const z = Math.cos(phi);
+  
+      const lat = 90 - (Math.acos(z) * 180) / Math.PI;
+      const lng = (((Math.atan2(y, x) * 180) / Math.PI + 270) % 360) - 180;
+  
+      if (geoContains(countryFeature, [lng, lat])) {
+        denseDots.push({
+          lat,
+          lng,
+          size: 0.05,
+          color: "#00ff00",
+          altitude: 0.001,
+          countryId: countryFeature.id || countryFeature.properties?.ISO_A3,
+        });
+      }
+    }
+  
+    return denseDots;
+  };
   // Load countries data
   useEffect(() => {
     const controller = new AbortController();
@@ -123,6 +155,8 @@ useEffect(() => {
             color: dotColor,
             altitude: 0.001,
             countryId,
+            isSelected: false, // new
+
           });
         
       } else {
@@ -167,49 +201,101 @@ useEffect(() => {
 
       if (clickedCountry) {
         setSelectedCountry(clickedCountry);
-
-        // OPTIMIZATION: Use pre-computed centroids if available
+      
+        const selectedCountryId =
+          clickedCountry.id || clickedCountry.properties?.ISO_A3;
+      
+        // ✅ Generate more green dots inside the selected country
+        const generateDenseCountryDots = (countryFeature) => {
+          const denseDots = [];
+        
+          // 🌍 Estimate area
+          const area = geoArea(countryFeature);
+          const densityFactor = 50000; // tweak for global density
+          const estimatedDots = Math.floor(area * densityFactor);
+        
+          // 🔲 Get bounding box of the country
+          const coordsArray = countryFeature.geometry.type === "Polygon"
+            ? countryFeature.geometry.coordinates[0]
+            : countryFeature.geometry.coordinates.flat(1);
+        
+          const lngs = coordsArray.map(([lng]) => lng);
+          const lats = coordsArray.map(([, lat]) => lat);
+          const minLng = Math.min(...lngs);
+          const maxLng = Math.max(...lngs);
+          const minLat = Math.min(...lats);
+          const maxLat = Math.max(...lats);
+        
+          // 🧮 Create symmetrical grid inside bounding box
+          const rows = Math.floor(Math.sqrt(estimatedDots));
+          const cols = rows;
+          const latStep = (maxLat - minLat) / rows;
+          const lngStep = (maxLng - minLng) / cols;
+        
+          for (let i = 0; i < rows; i++) {
+            const lat = minLat + i * latStep + latStep / 2;
+        
+            for (let j = 0; j < cols; j++) {
+              const lng = minLng + j * lngStep + lngStep / 2;
+        
+              if (geoContains(countryFeature, [lng, lat])) {
+                denseDots.push({
+                  lat,
+                  lng,
+                  size: 0.05,
+                  color: "#00ff00",
+                  altitude: 0.001,
+                  countryId: countryFeature.id || countryFeature.properties?.ISO_A3,
+                });
+              }
+            }
+          }
+        
+          return denseDots;
+        };
+        
+        
+        
+        
+      
+        // ✅ Remove old dots for this country and inject dense green ones
+        setPoints((prevPoints) => {
+          const others = prevPoints.filter((pt) => pt.countryId !== selectedCountryId);
+          const newCountryDots = generateDenseCountryDots(clickedCountry, 2000);
+          return [...others, ...newCountryDots];
+        });
+      
+        // ✅ Use cached centroid if available
         if (clickedCountry.properties.centroid) {
-          const { lat: centerLat, lng: centerLng } =
-            clickedCountry.properties.centroid;
-
-          // Zoom to the country
+          const { lat: centerLat, lng: centerLng } = clickedCountry.properties.centroid;
+      
           if (globeRef.current) {
-            const altitude = clickedCountry.properties.recommendedZoom || 1.5;
-
             globeRef.current.pointOfView(
-              { lat: centerLat, lng: centerLng, altitude: altitude },
-              800 // Faster animation for better responsiveness
+              { lat: centerLat, lng: centerLng, altitude: 0.7 },
+              800
             );
           }
         } else {
-          // Calculate the center of the country
+          // 📍 Compute centroid manually
           const polygon = clickedCountry.geometry;
-          let centerLat = 0,
-            centerLng = 0,
-            count = 0;
-
-          // Calculate the centroid of the country's coordinates (more efficient algorithm)
+          let centerLat = 0, centerLng = 0, count = 0;
+      
           if (
             polygon.type === "Polygon" &&
-            polygon.coordinates &&
-            polygon.coordinates.length > 0
+            polygon.coordinates?.length > 0
           ) {
-            // Only use the outer ring (first array) for centroid calculation
             const coords = polygon.coordinates[0];
-            // OPTIMIZATION: Sample fewer points for large polygons
             const stride = Math.max(1, Math.floor(coords.length / 100));
-
+      
             for (let i = 0; i < coords.length; i += stride) {
               centerLng += coords[i][0];
               centerLat += coords[i][1];
               count++;
             }
           } else if (polygon.type === "MultiPolygon" && polygon.coordinates) {
-            // OPTIMIZATION: Only use the largest polygon for centroid calculation
             let largestPolyIndex = 0;
             let largestPolySize = 0;
-
+      
             for (let i = 0; i < polygon.coordinates.length; i++) {
               const polySize = polygon.coordinates[i][0].length;
               if (polySize > largestPolySize) {
@@ -217,44 +303,41 @@ useEffect(() => {
                 largestPolyIndex = i;
               }
             }
-
+      
             const coords = polygon.coordinates[largestPolyIndex][0];
             const stride = Math.max(1, Math.floor(coords.length / 100));
-
+      
             for (let i = 0; i < coords.length; i += stride) {
               centerLng += coords[i][0];
               centerLat += coords[i][1];
               count++;
             }
           }
-
+      
           if (count > 0) {
             centerLat /= count;
             centerLng /= count;
-
-            // Cache the centroid for future use
+      
             clickedCountry.properties.centroid = {
               lat: centerLat,
               lng: centerLng,
             };
-
-            // Zoom to the country
+      
+            const size = Math.sqrt(count) / 20;
+            const altitude = Math.max(0.5, Math.min(1.8, 2.5 / size));
+            clickedCountry.properties.recommendedZoom = altitude;
+      
             if (globeRef.current) {
-              // OPTIMIZATION: Simplified size calculation
-              const size = Math.sqrt(count) / 20;
-              const altitude = Math.max(0.5, Math.min(1.8, 2.5 / size));
-
-              // Cache the recommended zoom
-              clickedCountry.properties.recommendedZoom = altitude;
-
               globeRef.current.pointOfView(
-                { lat: centerLat, lng: centerLng, altitude: altitude },
-                800 // Faster animation for better responsiveness
+                { lat: centerLat, lng: centerLng, altitude: 0.7 },
+                800
               );
             }
           }
         }
-      } else {
+      }
+      
+       else {
         // If clicked outside any country, zoom out
         if (globeRef.current) {
           globeRef.current.pointOfView({ lat, lng, altitude: 2.5 }, 800);
