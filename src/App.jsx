@@ -1,3 +1,4 @@
+"use server"
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import Globe from "react-globe.gl";
 import { geoContains ,geoArea } from "d3-geo";
@@ -71,119 +72,8 @@ function App() {
     return () => controller.abort(); // Cleanup fetch requests
   }, []);
 
-  // Generate globe points with LARGER dots - OPTIMIZED
-useEffect(() => {
-  if (!countries.length) return;
-
-  const generatePoints = () => {
-    const countryPoints = [];
-    const borders = [];
-    const seaPoints = [];
-
-    // const totalPoints = Math.min(15000, countries.length * 100);
-    const totalPoints = 12000; // Decrease slightly to create spacing
-
-
-    const countryPolygons = countries.map((country) => ({
-      feature: country,
-      id: country.id || country.properties.ISO_A3,
-    }));
-
-    for (let i = 0; i < totalPoints; i++) {
-      const phi = Math.acos(1 - 2 * (i / totalPoints));
-      const theta = Math.PI * (1 + Math.sqrt(5)) * i;
-
-      const x = Math.cos(theta) * Math.sin(phi);
-      const y = Math.sin(theta) * Math.sin(phi);
-      const z = Math.cos(phi);
-
-      const lat = 90 - (Math.acos(z) * 180) / Math.PI;
-      const lng = (((Math.atan2(y, x) * 180) / Math.PI + 270) % 360) - 180;
-
-      let isInCountry = false;
-      let isBorder = false;
-      let countryId = null;
-      let neighborCountryId = null;
-
-      const borderBuffer = 0.3;
-
-      for (const { feature, id } of countryPolygons) {
-        try {
-          if (geoContains(feature, [lng, lat])) {
-            isInCountry = true;
-            countryId = id;
-
-            for (let dx = -borderBuffer; dx <= borderBuffer; dx += borderBuffer) {
-              for (let dy = -borderBuffer; dy <= borderBuffer; dy += borderBuffer) {
-                if (dx === 0 && dy === 0) continue;
-
-                const checkLng = lng + dx;
-                const checkLat = lat + dy;
-
-                let foundDifferentCountry = false;
-
-                for (const { feature: neighborFeature, id: neighborId } of countryPolygons) {
-                  if (
-                    id !== neighborId &&
-                    geoContains(neighborFeature, [checkLng, checkLat])
-                  ) {
-                    foundDifferentCountry = true;
-                    neighborCountryId = neighborId;
-                    break;
-                  }
-                }
-
-                if (foundDifferentCountry) {
-                  isBorder = true;
-                  break;
-                }
-              }
-              if (isBorder) break;
-            }
-
-            break;
-          }
-        } catch (e) {
-          continue;
-        }
-      }
-
-      if (isInCountry) {
-    
-          countryPoints.push({
-            lat,
-            lng,
-            size: 0.2, // Smaller dot
-            color: dotColor,
-            altitude: 0.001,
-            countryId,
-            isSelected: false, // new
-
-          });
-        
-      } else {
-        // 🌊 Sea dot
-        seaPoints.push({
-          lat,
-          lng,
-          size: 0.05, // Smaller water dot
-          color: "#60a5fa", // Light blue
-          altitude: 0.0007,
-        });
-      }
-      
-    }
-
-    // Combine all for rendering
-    setPoints([...countryPoints, ...seaPoints]);
-    setBorderPoints(borders);
-  };
-
-  generatePoints();
-}, [countries, dotColor, borderColor]);
-
-
-  // Handle globe click to zoom to the country - OPTIMIZED
+  
+  
   const handleGlobeClick = useCallback(
     ({ lat, lng }) => {
       // Use a more efficient country lookup
@@ -367,6 +257,122 @@ useEffect(() => {
     },
     [countries]
   );
+
+  
+  // Generate globe points with LARGER dots - OPTIMIZED
+useEffect(() => {
+  if (!countries.length) return;
+
+  const generatePoints = () => {
+    const countryPoints = [];
+    const borders = [];
+    const seaPoints = [];
+
+    // const totalPoints = Math.min(15000, countries.length * 100);
+    const totalPoints = 12000; // Decrease slightly to create spacing
+
+
+    const countryPolygons = countries.map((country) => ({
+      feature: country,
+      id: country.id || country.properties.ISO_A3,
+    }));
+
+    for (let i = 0; i < totalPoints; i++) {
+      const phi = Math.acos(1 - 2 * (i / totalPoints));
+      const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+
+      const x = Math.cos(theta) * Math.sin(phi);
+      const y = Math.sin(theta) * Math.sin(phi);
+      const z = Math.cos(phi);
+
+      const lat = 90 - (Math.acos(z) * 180) / Math.PI;
+      const lng = (((Math.atan2(y, x) * 180) / Math.PI + 270) % 360) - 180;
+
+      let isInCountry = false;
+      let isBorder = false;
+      let countryId = null;
+      let neighborCountryId = null;
+
+      const borderBuffer = 0.3;
+
+      for (const { feature, id } of countryPolygons) {
+        try {
+          if (geoContains(feature, [lng, lat])) {
+            isInCountry = true;
+            countryId = id;
+
+            for (let dx = -borderBuffer; dx <= borderBuffer; dx += borderBuffer) {
+              for (let dy = -borderBuffer; dy <= borderBuffer; dy += borderBuffer) {
+                if (dx === 0 && dy === 0) continue;
+
+                const checkLng = lng + dx;
+                const checkLat = lat + dy;
+
+                let foundDifferentCountry = false;
+
+                for (const { feature: neighborFeature, id: neighborId } of countryPolygons) {
+                  if (
+                    id !== neighborId &&
+                    geoContains(neighborFeature, [checkLng, checkLat])
+                  ) {
+                    foundDifferentCountry = true;
+                    neighborCountryId = neighborId;
+                    break;
+                  }
+                }
+
+                if (foundDifferentCountry) {
+                  isBorder = true;
+                  break;
+                }
+              }
+              if (isBorder) break;
+            }
+
+            break;
+          }
+        } catch (e) {
+          continue;
+        }
+      }
+
+      if (isInCountry) {
+    
+          countryPoints.push({
+            lat,
+            lng,
+            size: 0.2, // Smaller dot
+            color: dotColor,
+            altitude: 0.001,
+            countryId,
+            isSelected: false, // new
+
+          });
+        
+      } else {
+        // 🌊 Sea dot
+        seaPoints.push({
+          lat,
+          lng,
+          size: 0.05, // Smaller water dot
+          color: "#60a5fa", // Light blue
+          altitude: 0.0007,
+        });
+      }
+      
+    }
+
+    // Combine all for rendering
+    setPoints([...countryPoints, ...seaPoints]);
+    setBorderPoints(borders);
+  };
+
+  generatePoints();
+}, [countries, dotColor, borderColor, handleGlobeClick]);
+
+
+  // Handle globe click to zoom to the country - OPTIMIZED
+
 
   // OPTIMIZED scene setup
   useEffect(() => {
