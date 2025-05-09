@@ -273,13 +273,25 @@ useEffect(() => {
   
     // 🎯 Set globe color by traversing to the globe mesh and adjusting material
     scene.traverse((obj) => {
-      if (obj.isMesh && obj.material && obj.material.uniforms) {
-        // 🌍 Replace shiny material with matte
-        obj.material = new THREE.MeshBasicMaterial({
-          color: new THREE.Color("#1d1c4c"), // your matte base color
-        });
+      if (obj.isMesh && obj.material) {
+        // Optional: Log object names to debug
+        // console.log("Traversed mesh:", obj.name);
+    
+        // 🌍 Detect globe mesh by checking for known uniforms or name
+        const isGlobe = obj.material.uniforms?.globeColor || obj.name?.toLowerCase().includes("globe");
+    
+        if (isGlobe) {
+          // Replace shiny shader material with a flat matte basic material
+          obj.material.dispose(); // Free the old material
+          obj.material = new THREE.MeshBasicMaterial({
+            color: new THREE.Color("#1d1c4c"), // Your desired matte base color
+          });
+    
+          obj.material.needsUpdate = true;
+        }
       }
     });
+    
   
     // 💡 Lighting
     const ambientLight = new THREE.AmbientLight(0x444444);
@@ -329,7 +341,7 @@ useEffect(() => {
   const globeConfig = useMemo(
     () => ({
       // globeImageUrl: "//unpkg.com/three-globe/example/img/earth-dark.jpg",
-      backgroundColor: '#240c48', // ← ✅ REMOVE CANVAS BACKGROUND
+      backgroundColor: '#140F30', // ← ✅ REMOVE CANVAS BACKGROUND
       pointAltitude: "altitude",
       pointColor: "color",
       pointRadius: "size",
