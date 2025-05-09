@@ -9,6 +9,8 @@ function App() {
   const [points, setPoints] = useState([]);
   const [borderPoints, setBorderPoints] = useState([]);
   const [selectedCountry, setSelectedCountry] = useState(null);
+  const previousCountryIdRef = useRef(null);
+  
 
   // Colors for visualization
   const dotColor = "#D927C2"; // Brighter purple for country dots
@@ -260,10 +262,29 @@ useEffect(() => {
       
         // ✅ Remove old dots for this country and inject dense green ones
         setPoints((prevPoints) => {
-          const others = prevPoints.filter((pt) => pt.countryId !== selectedCountryId);
-          const newCountryDots = generateDenseCountryDots(clickedCountry, 2000);
-          return [...others, ...newCountryDots];
+          const updatedPoints = prevPoints.map((pt) => {
+            // Restore previous country's green dots to purple
+            if (pt.countryId === previousCountryIdRef.current) {
+              return { ...pt, color: dotColor, size: 0.15 };
+            }
+            return pt;
+          });
+        
+          // Remove current country's old dots (if any)
+          const filteredPoints = updatedPoints.filter(
+            (pt) => pt.countryId !== selectedCountryId
+          );
+        
+          // Generate or reuse green dots for the clicked country
+          const newCountryDots = generateDenseCountryDots(clickedCountry);
+          
+          // Cache the current as previous for next click
+          previousCountryIdRef.current = selectedCountryId;
+        
+          return [...filteredPoints, ...newCountryDots];
         });
+        
+        
       
         // ✅ Use cached centroid if available
         if (clickedCountry.properties.centroid) {
@@ -497,6 +518,32 @@ useEffect(() => {
       >
         {points.length.toLocaleString()} purple dots |{" "}
         {borderPoints.length.toLocaleString()} border points
+        <button
+  style={{
+    position: "absolute",
+    top: "10px",
+    left: "10px",
+    padding: "8px 12px",
+    backgroundColor: "#1d1c4c",
+    color: "#fff",
+    border: "none",
+    borderRadius: "4px",
+    cursor: "pointer",
+    zIndex: 10,
+  }}
+  onClick={() => {
+    setSelectedCountry(null);
+    globeRef.current?.pointOfView(
+      { lat: 37.6, lng: -95.665, altitude: 2.2 },
+      1000
+    );
+  }}
+  
+>
+  Reset View
+</button>
+
+        
       </div>
       <style>
         {`
