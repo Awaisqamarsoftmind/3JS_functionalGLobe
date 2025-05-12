@@ -111,7 +111,7 @@ const lonSteps =
             console.log("🚀 ~ DotGlobe ~ zoomLevel:", {zoomLevel, cameraDistance})
 
             const landSize =
-  zoomLevel === "close" ? "4.25" : zoomLevel === "medium" ? '4.25' : '4.25';
+  zoomLevel === "close" ? "3.25" : zoomLevel === "medium" ? '4.25' : '4.25';
 
 const waterSize =
   zoomLevel === "close" ? "1.0" : zoomLevel === "medium" ? "1.0" : "1.0";
@@ -186,9 +186,9 @@ export default function GlobeScene() {
   return (
     <div style={{ height: "100vh", width: "100vw", background: "#0d001c" }}>
       <Canvas camera={{ position: [0, 0, 4] }}>
-        <ambientLight intensity={0.3} />
-        <pointLight  position={[5, 5, 5]} color="#D927C2" intensity={1.2} />
-        <DotGlobe autoRotate={autoRotate} />
+        <ambientLight color={'#140F30'} intensity={0.3} />
+        <pointLight  position={[5, 5, 5]} color={'#140F30'} intensity={1.2} />
+        <DotGlobe  autoRotate={autoRotate} />
         <OrbitControls
   ref={orbitRef}
   enableZoom
@@ -198,7 +198,7 @@ export default function GlobeScene() {
   minDistance={1.6}
   maxDistance={10}
   minPolarAngle={0}
-  maxPolarAngle={Math.PI}  // or Math.PI * 0.95 for slight top/bottom limit
+  maxPolarAngle={Math.PI}  
 />
 
       </Canvas>
