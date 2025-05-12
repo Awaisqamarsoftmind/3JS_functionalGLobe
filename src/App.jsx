@@ -524,33 +524,30 @@ useEffect(() => {
       >
         {points.length.toLocaleString()} purple dots |{" "}
         {borderPoints.length.toLocaleString()} border points
-        <button
-  style={{
-    position: "absolute",
-    top: "10px",
-    left: "10px",
-    padding: "8px 12px",
-    backgroundColor: "#1d1c4c",
-    color: "#fff",
-    border: "none",
-    borderRadius: "4px",
-    cursor: "pointer",
-    zIndex: 10,
-  }}
-  onClick={() => {
-    setSelectedCountry(null);
-    globeRef.current?.pointOfView(
-      { lat: 37.6, lng: -95.665, altitude: 2.2 },
-      1000
-    );
-  }}
-  
->
-  Reset View
-</button>
-
-        
       </div>
+      <button
+        style={{
+          position: "absolute",
+          top: "10px",
+          left: "10px",
+          padding: "8px 12px",
+          backgroundColor: "#1d1c4c",
+          color: "#fff",
+          border: "none",
+          borderRadius: "4px",
+          cursor: "pointer",
+          zIndex: 10,
+        }}
+        onClick={() => {
+          setSelectedCountry(null);
+          globeRef.current?.pointOfView(
+            { lat: 37.6, lng: -95.665, altitude: 2.2 },
+            1000
+          );
+        }}
+      >
+        Reset View
+      </button>
       <style>
         {`
         .globe-wrapper {
