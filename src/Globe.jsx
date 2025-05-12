@@ -8,115 +8,144 @@ import * as d3 from "d3-geo";
 
 
 
-function DotGlobe({ autoRotate }) {
-  const groupRef = useRef();
-  const [landMask, setLandMask] = useState(null);
-  const radius = 1.5;
-
-  useEffect(() => {
-    fetch("/land-mask.json")
-      .then((res) => res.json())
-      .then(setLandMask);
-  }, []);
-
-
-
-  const { landGeometry, waterGeometry } = useMemo(() => {
-    const landDots = [];
-    const waterDots = [];
-
-    const latSteps = 90;
-    const lonSteps = 180;
-
-    for (let i = 0; i <= latSteps; i++) {
-      const lat = (i / latSteps) * 180 - 90;
-      for (let j = 0; j <= lonSteps; j++) {
-        const lon = (j / lonSteps) * 360 - 180;
-
-        const latIndex = Math.floor(((lat + 90) / 180) * landMask?.length);
-        const lonIndex = Math.floor(((lon + 180) / 360) * landMask?.[0]?.length);
-        const isLand = landMask?.[latIndex]?.[lonIndex] === 1;
-
-        const latRad = THREE.MathUtils.degToRad(90 - lat);
-        const lonRad = THREE.MathUtils.degToRad(lon);
-
-        const x = radius * Math.sin(latRad) * Math.cos(lonRad);
-        const y = radius * Math.cos(latRad);
-        const z = radius * Math.sin(latRad) * Math.sin(lonRad);
-
-        const point = [x, y, z];
-        if (isLand) landDots.push(...point);
-        else waterDots.push(...point);
+ function DotGlobe({ autoRotate }) {
+    const groupRef = useRef();
+    const { camera } = useThree();
+    const [cameraDistance, setCameraDistance] = useState(4);
+    const [landMask, setLandMask] = useState(null);
+    const radius = 1.5;
+  
+    // Load land mask
+    useEffect(() => {
+      fetch("/land-mask.json")
+        .then((res) => res.json())
+        .then(setLandMask);
+    }, []);
+  
+    // Load background texture
+    const texture = useMemo(() => new THREE.TextureLoader().load("/bg.png"), []);
+  
+    // Auto-rotate & camera distance tracking
+    useFrame(() => {
+      if (autoRotate && groupRef.current) {
+        groupRef.current.rotation.y += 0.0015;
       }
-    }
+      setCameraDistance(camera.position?.length());
+    });
+  
 
-    const landGeometry = new THREE.BufferGeometry();
-    landGeometry.setAttribute("position", new THREE.Float32BufferAttribute(landDots, 3));
+  
+    // Generate dots
+    const { landGeometry, waterGeometry } = useMemo(() => {
+      const landDots = [];
+      const waterDots = [];
+  
 
-    const waterGeometry = new THREE.BufferGeometry();
-    waterGeometry.setAttribute("position", new THREE.Float32BufferAttribute(waterDots, 3));
+      
 
-    return { landGeometry, waterGeometry };
-  }, [landMask]);
+      const latSteps = 90;
+      const lonSteps = 180;
 
-  // Shaders
-  const vertexShader = `
-    void main() {
-      gl_PointSize = SIZE;
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-  `;
-
-  const circleFragmentShader = `
-    void main() {
-      float r = length(gl_PointCoord - vec2(0.5));
-      if (r > 0.5) discard;
-      gl_FragColor = vec4(COLOR, 1.0);
-    }
-  `;
-
-  // LAND
-  const landMaterial = new THREE.ShaderMaterial({
-    vertexShader: vertexShader.replace("SIZE", "4.0"),
-    fragmentShader: circleFragmentShader.replace("COLOR", "0.85, 0.16, 0.76"), // #D927C2
-    transparent: true,
-    depthWrite: false,
-  });
-
-  // WATER
-  const waterMaterial = new THREE.ShaderMaterial({
-    vertexShader: vertexShader.replace("SIZE", "1.75"),
-    fragmentShader: circleFragmentShader.replace("COLOR", "0.43, 0.81, 0.96"), // #6ecff6
-    transparent: true,
-    depthWrite: false,
-  });
-  const texture = new THREE.TextureLoader().load("/bg.png");
-
-
-  useFrame(() => {
-    if (autoRotate && groupRef.current) {
-      groupRef.current.rotation.y += 0.0015;
-    }
-  });
-  if (!landMask) {
+    
+  
+      for (let i = 0; i <= latSteps; i++) {
+        const lat = (i / latSteps) * 180 - 90;
+        for (let j = 0; j <= lonSteps; j++) {
+          const lon = (j / lonSteps) * 360 - 180;
+  
+          const latIndex = Math.floor(((lat + 90) / 180) * landMask?.length);
+          const lonIndex = Math.floor(((lon + 180) / 360) * landMask?.[0]?.length);
+          const isLand = landMask?.[latIndex]?.[lonIndex] === 1;
+  
+          const latRad = THREE.MathUtils.degToRad(90 - lat);
+          const lonRad = THREE.MathUtils.degToRad(lon);
+  
+          const x = radius * Math.sin(latRad) * Math.cos(lonRad);
+          const y = radius * Math.cos(latRad);
+          const z = radius * Math.sin(latRad) * Math.sin(lonRad);
+  
+          const point = [x, y, z];
+          if (isLand) landDots.push(...point);
+          else waterDots.push(...point);
+        }
+      }
+  
+      const landGeometry = new THREE.BufferGeometry();
+      landGeometry.setAttribute("position", new THREE.Float32BufferAttribute(landDots, 3));
+  
+      const waterGeometry = new THREE.BufferGeometry();
+      waterGeometry.setAttribute("position", new THREE.Float32BufferAttribute(waterDots, 3));
+  
+      return { landGeometry, waterGeometry };
+    }, [landMask]);
+  
+    // Shaders
+    const vertexShader = `
+      uniform float uScale;
+      void main() {
+        gl_PointSize = SIZE * (4.0 / uScale);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `;
+  
+    const fragmentShader = `
+      void main() {
+        float r = length(gl_PointCoord - vec2(0.5));
+        if (r > 0.5) discard;
+        gl_FragColor = vec4(COLOR, 1.0);
+      }
+    `;
+  
+    // Materials
+    const landMaterial = useMemo(
+      () =>
+        new THREE.ShaderMaterial({
+          vertexShader: vertexShader.replace("SIZE", "4.0"),
+          fragmentShader: fragmentShader.replace("COLOR", "0.85, 0.16, 0.76"), // #D927C2
+          uniforms: {
+            uScale: { value: cameraDistance },
+          },
+          transparent: true,
+          depthWrite: false,
+        }),
+      [cameraDistance]
+    );
+  
+    const waterMaterial = useMemo(
+      () =>
+        new THREE.ShaderMaterial({
+          vertexShader: vertexShader.replace("SIZE", "1.2"),
+          fragmentShader: fragmentShader.replace("COLOR", "0.43, 0.81, 0.96"), // #6ecff6
+          uniforms: {
+            uScale: { value: cameraDistance },
+          },
+          transparent: true,
+          depthWrite: false,
+        }),
+      [cameraDistance]
+    );
+  
+    if (!landMask) {
+        return (
+          <Html center>
+            <div style={{ color: "white", fontSize: "1.5rem" }}>🌍 Loading Globe...</div>
+          </Html>
+        );
+      }
     return (
-      <Html center>
-        <div style={{ color: "white", fontSize: "1.5rem" }}>🌍 Loading Globe...</div>
-      </Html>
+      <group ref={groupRef}>
+        {/* Globe base with bg image */}
+        <mesh>
+          <sphereGeometry args={[radius, 64, 64]} />
+          <meshStandardMaterial map={texture} />
+        </mesh>
+  
+        {/* Dots */}
+        <points geometry={landGeometry} material={landMaterial} />
+        <points geometry={waterGeometry} material={waterMaterial} />
+      </group>
     );
   }
-  return (
-    <group ref={groupRef}>
-      <mesh>
-        <sphereGeometry  args={[radius, 64, 64]} />
-        <meshStandardMaterial  map={texture}/>
-      </mesh>
-
-      <points geometry={landGeometry} material={landMaterial} />
-      <points geometry={waterGeometry} material={waterMaterial} />
-    </group>
-  );
-}
 
   
 
@@ -155,8 +184,8 @@ export default function GlobeScene() {
   rotateSpeed={0.5}
   minDistance={1.6}
   maxDistance={10}
-  maxPolarAngle={Math.PI / 2}
-  minPolarAngle={Math.PI / 2}
+  minPolarAngle={0}
+  maxPolarAngle={Math.PI}  // or Math.PI * 0.95 for slight top/bottom limit
 />
 
       </Canvas>
