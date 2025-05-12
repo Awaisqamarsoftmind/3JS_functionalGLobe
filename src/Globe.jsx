@@ -8,24 +8,21 @@ import * as d3 from "d3-geo";
 
 
 
- function DotGlobe({ autoRotate }) {
+function DotGlobe({ autoRotate }) {
     const groupRef = useRef();
     const { camera } = useThree();
     const [cameraDistance, setCameraDistance] = useState(4);
     const [landMask, setLandMask] = useState(null);
     const radius = 1.5;
   
-    // Load land mask
     useEffect(() => {
       fetch("/land-mask.json")
         .then((res) => res.json())
         .then(setLandMask);
     }, []);
   
-    // Load background texture
     const texture = useMemo(() => new THREE.TextureLoader().load("/bg.png"), []);
   
-    // Auto-rotate & camera distance tracking
     useFrame(() => {
       if (autoRotate && groupRef.current) {
         groupRef.current.rotation.y += 0.0015;
@@ -33,20 +30,24 @@ import * as d3 from "d3-geo";
       setCameraDistance(camera.position?.length());
     });
   
-
-  
-    // Generate dots
     const { landGeometry, waterGeometry } = useMemo(() => {
+      if (!landMask) return {};
+  
       const landDots = [];
       const waterDots = [];
   
+      const zoomThreshold = 2.0;
+      const zoomedIn = cameraDistance < zoomThreshold;
+      const zoomLevel = cameraDistance < 2.0
+      ? "close"
+      : cameraDistance < 2.5
+      ? "medium"
+      : "far";
+const latSteps =
+  zoomLevel === "close" ? 600 : zoomLevel === "medium" ? 180 : 90;
 
-      
-
-      const latSteps = 90;
-      const lonSteps = 180;
-
-    
+const lonSteps =
+  zoomLevel === "close" ? 600 : zoomLevel === "medium" ? 240 : 180;
   
       for (let i = 0; i <= latSteps; i++) {
         const lat = (i / latSteps) * 180 - 90;
@@ -65,6 +66,11 @@ import * as d3 from "d3-geo";
           const z = radius * Math.sin(latRad) * Math.sin(lonRad);
   
           const point = [x, y, z];
+  
+          // optional custom zone coloring if needed
+          // let color = "#D927C2";
+          // if (zoomedIn && lat > 25 && lat < 27 && lon > -81 && lon < -79) color = "green";
+  
           if (isLand) landDots.push(...point);
           else waterDots.push(...point);
         }
@@ -77,48 +83,56 @@ import * as d3 from "d3-geo";
       waterGeometry.setAttribute("position", new THREE.Float32BufferAttribute(waterDots, 3));
   
       return { landGeometry, waterGeometry };
-    }, [landMask]);
-  
-    // Shaders
+    }, [landMask, cameraDistance]);
+    
     const vertexShader = `
-      uniform float uScale;
-      void main() {
-        gl_PointSize = SIZE * (4.0 / uScale);
+    uniform float uScale;
+    void main() {
+        gl_PointSize = SIZE;
+        
         gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-      }
-    `;
+        }
+        `;
+        
+        const fragmentShader = `
+        void main() {
+            float r = length(gl_PointCoord - vec2(0.5));
+            if (r > 0.5) discard;
+            gl_FragColor = vec4(COLOR, 1.0);
+            }
+            `;
+            
+            const zoomedIn = cameraDistance < 2.5;
+            const zoomLevel = cameraDistance < 2.0
+            ? "close"
+            : cameraDistance < 2.5
+            ? "medium"
+            : "far";
+            console.log("🚀 ~ DotGlobe ~ zoomLevel:", {zoomLevel, cameraDistance})
+
+            const landSize =
+  zoomLevel === "close" ? "4.25" : zoomLevel === "medium" ? '4.25' : '4.25';
+
+const waterSize =
+  zoomLevel === "close" ? "1.0" : zoomLevel === "medium" ? "1.0" : "1.0";
   
-    const fragmentShader = `
-      void main() {
-        float r = length(gl_PointCoord - vec2(0.5));
-        if (r > 0.5) discard;
-        gl_FragColor = vec4(COLOR, 1.0);
-      }
-    `;
-  
-    // Materials
     const landMaterial = useMemo(
-      () =>
-        new THREE.ShaderMaterial({
-          vertexShader: vertexShader.replace("SIZE", "4.0"),
-          fragmentShader: fragmentShader.replace("COLOR", "0.85, 0.16, 0.76"), // #D927C2
-          uniforms: {
-            uScale: { value: cameraDistance },
-          },
-          transparent: true,
-          depthWrite: false,
-        }),
-      [cameraDistance]
-    );
+        () =>
+          new THREE.ShaderMaterial({
+            vertexShader: vertexShader.replace("SIZE", landSize),
+            fragmentShader: fragmentShader.replace("COLOR", "0.85, 0.16, 0.76"),
+            transparent: true,
+            depthWrite: false,
+          }),
+        [cameraDistance]
+      );
   
     const waterMaterial = useMemo(
       () =>
         new THREE.ShaderMaterial({
-          vertexShader: vertexShader.replace("SIZE", "1.2"),
-          fragmentShader: fragmentShader.replace("COLOR", "0.43, 0.81, 0.96"), // #6ecff6
-          uniforms: {
-            uScale: { value: cameraDistance },
-          },
+          vertexShader: vertexShader.replace("SIZE", waterSize),
+          fragmentShader: fragmentShader.replace("COLOR", "0.43, 0.81, 0.96"),
+          uniforms: { uScale: { value: cameraDistance } },
           transparent: true,
           depthWrite: false,
         }),
@@ -126,21 +140,20 @@ import * as d3 from "d3-geo";
     );
   
     if (!landMask) {
-        return (
-          <Html center>
-            <div style={{ color: "white", fontSize: "1.5rem" }}>🌍 Loading Globe...</div>
-          </Html>
-        );
-      }
+      return (
+        <Html center>
+          <div style={{ color: "white", fontSize: "1.5rem" }}>🌍 Loading Globe...</div>
+        </Html>
+      );
+    }
+  
     return (
       <group ref={groupRef}>
-        {/* Globe base with bg image */}
         <mesh>
           <sphereGeometry args={[radius, 64, 64]} />
           <meshStandardMaterial map={texture} />
         </mesh>
   
-        {/* Dots */}
         <points geometry={landGeometry} material={landMaterial} />
         <points geometry={waterGeometry} material={waterMaterial} />
       </group>
