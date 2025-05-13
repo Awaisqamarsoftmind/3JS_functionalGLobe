@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Html, OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
-import * as d3 from "d3-geo";
 // import worldGeoJSON from "./world-110m.geo.json"; // Download from https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson
 
 
@@ -114,7 +113,7 @@ const lonSteps =
   zoomLevel === "close" ? "3.25" : zoomLevel === "medium" ? '4.25' : '4.25';
 
 const waterSize =
-  zoomLevel === "close" ? "1.0" : zoomLevel === "medium" ? "1.0" : "1.0";
+  zoomLevel === "close" ? "1.4" : zoomLevel === "medium" ? "1.4" : "1.4";
   
     const landMaterial = useMemo(
         () =>
@@ -148,14 +147,16 @@ const waterSize =
     }
   
     return (
-      <group ref={groupRef}>
-        <mesh>
-          <sphereGeometry args={[radius, 64, 64]} />
-          <meshStandardMaterial map={texture} />
+      <group ref={groupRef} >
+        <mesh >
+          <sphereGeometry args={[radius, 64, 64]}  />
+          <meshStandardMaterial color="red" vertexColors='red' blendColor='red' 
+           map={texture} 
+          />
         </mesh>
   
-        <points geometry={landGeometry} material={landMaterial} />
-        <points geometry={waterGeometry} material={waterMaterial} />
+        <points geometry={landGeometry} material={landMaterial}  />
+        <points geometry={waterGeometry} material={waterMaterial}  />
       </group>
     );
   }
@@ -184,7 +185,7 @@ export default function GlobeScene() {
   };
 
   return (
-    <div style={{ height: "100vh", width: "100vw", background: "#0d001c" }}>
+    <div  style={{ height: "50vh", width: "20vw", background: "transparent" }}>
       <Canvas camera={{ position: [0, 0, 4] }}>
         <ambientLight color={'#140F30'} intensity={0.3} />
         <pointLight  position={[5, 5, 5]} color={'#140F30'} intensity={1.2} />
